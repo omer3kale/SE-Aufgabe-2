@@ -3,31 +3,35 @@ package com.spotifybot.application.service;
 import com.spotifybot.application.command.PlaceOrderCommand;
 import com.spotifybot.application.response.OrderResponse;
 import com.spotifybot.domain.model.Order;
+import com.spotifybot.domain.port.OrderRepositoryPort;
+import com.spotifybot.domain.service.SpotifyComplianceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Application Service - Order management use cases.
  * 
- * Orchestrates order lifecycle: create → process → complete.
+ * Orchestrates order lifecycle: create → validate → process → complete.
+ * Uses domain ports for persistence (Hexagonal Architecture).
  */
 @Service
 public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
-    // In-memory store (replace with Supabase in production)
-    private final Map<UUID, Order> orders = new ConcurrentHashMap<>();
-
+    private final OrderRepositoryPort orderRepository;
     private final BotOrchestratorService orchestratorService;
+    private final SpotifyComplianceService complianceService;
 
-    public OrderService(BotOrchestratorService orchestratorService) {
+    public OrderService(OrderRepositoryPort orderRepository,
+                        BotOrchestratorService orchestratorService,
+                        SpotifyComplianceService complianceService) {
+        this.orderRepository = orderRepository;
         this.orchestratorService = orchestratorService;
+        this.complianceService = complianceService;
     }
 
     /**
@@ -41,7 +45,10 @@ public class OrderService {
                 command.speedTier()
         );
 
-        orders.put(order.getId(), order);
+        // Validate compliance before accepting
+        complianceService.validateOrder(order);
+        
+        orderRepository.save(order);
         log.info("Order created: id={}, quantity={}, geo={}", 
                 order.getId(), order.getQuantity(), order.getGeoTarget());
 
@@ -55,10 +62,8 @@ public class OrderService {
      * Get order status by ID.
      */
     public OrderResponse getOrderStatus(UUID orderId) {
-        Order order = orders.get(orderId);
-        if (order == null) {
-            throw new IllegalArgumentException("Order not found: " + orderId);
-        }
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         return OrderResponse.from(order);
     }
 
@@ -66,23 +71,10 @@ public class OrderService {
      * Cancel an order.
      */
     public void cancelOrder(UUID orderId) {
-        Order order = orders.get(orderId);
-        if (order == null) {
-            throw new IllegalArgumentException("Order not found: " + orderId);
-        }
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         order.cancel();
+        orderRepository.save(order);
         log.info("Order cancelled: id={}", orderId);
-    }
-
-    /**
-     * Update order delivery progress (called by bot executor).
-     */
-    public void updateDelivery(UUID orderId, int deliveredCount) {
-        Order order = orders.get(orderId);
-        if (order != null) {
-            order.addDelivered(deliveredCount);
-            log.debug("Order progress: id={}, delivered={}/{}", 
-                    orderId, order.getDelivered(), order.getQuantity());
-        }
     }
 }
