@@ -49,6 +49,19 @@ public record SessionProfile(
                 follow
         );
     }
+
+    /**
+     * Create default session profile for task decomposition.
+     */
+    public static SessionProfile createDefault() {
+        return new SessionProfile(
+                Duration.ofSeconds(45),  // Royalty eligible
+                false,
+                0,
+                false,
+                false
+        );
+    }
     
     /**
      * Check if session meets Spotify royalty threshold (35s+).

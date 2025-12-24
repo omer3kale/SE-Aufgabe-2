@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "name": "goodfellaz",
+  "builds": [
+    {
+      "src": "pom.xml",
+      "use": "@vercel/java"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/v2/(.*)",
+      "dest": "/api/v2/$1"
+    },
+    {
+      "src": "/user/(.*)",
+      "dest": "/user/$1"
+    },
+    {
+      "src": "/actuator/(.*)",
+      "dest": "/actuator/$1"
+    },
+    {
+      "src": "/ws/(.*)",
+      "dest": "/ws/$1"
+    }
+  ],
+  "env": {
+    "SPRING_PROFILES_ACTIVE": "prod",
+    "JAVA_OPTS": "-Xmx512m -Xms256m"
+  },
+  "build": {
+    "env": {
+      "JAVA_VERSION": "17"
+    }
+  },
+  "regions": ["iad1"],
+  "functions": {
+    "api/**/*.java": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  }
+}
